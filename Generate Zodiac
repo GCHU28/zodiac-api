@@ -1,0 +1,424 @@
+e    <?php
+    /*
+    Plugin Name: Random Zodiac Plugin
+    Description: Zodiac API and etc
+    Version: 1.0
+    Author: Zodiac
+    */
+    
+    class Random_Zodiac_API {
+    
+        public function __construct() {
+            add_action('rest_api_init', array($this, 'register_random_zodiac_api_endpoint'));
+        }
+    
+        public function register_random_zodiac_api_endpoint() {
+            register_rest_route('random-zodiac/v1', '/generate', array(
+                'methods'  => 'GET',
+                'callback' => array($this, 'generate_random_zodiac_signs'),
+            ));
+        }
+    
+    public function generate_random_zodiac_signs() {
+        $allowed_ips = get_option('allowed_ip_address', ''); // Retrieve allowed IP addresses from settings
+        $allowed_ips_array = array_map('trim', explode(',', $allowed_ips)); // Convert the string to an array of IPs
+    
+        // Check if the user's IP is allowed
+        $user_ip = $_SERVER['REMOTE_ADDR'];
+        if (!in_array($user_ip, $allowed_ips_array)) {
+            return new WP_REST_Response(array('error' => 'Unauthorized'), 401);
+        }
+    
+            $zodiac_signs_mapping = array(
+                'Rat' => array('name' => '鼠', 'image' => 'https://example.com/wp-content/uploads/2024/05/1.png', 'number' => '01'),
+                'Ox' => array('name' => '牛', 'image' => 'https://example.com/wp-content/uploads/2024/05/2.png', 'number' => '02'),
+                'Tig' => array('name' => '虎', 'image' => 'https://example.com/wp-content/uploads/2024/05/3.png', 'number' => '03'),
+                'Rab' => array('name' => '兔', 'image' => 'https://example.com/wp-content/uploads/2024/05/4.png', 'number' => '04'),
+                'Dra' => array('name' => '龍', 'image' => 'https://example.com/wp-content/uploads/2024/05/5.png', 'number' => '05'),
+                'Sna' => array('name' => '蛇', 'image' => 'https://example.com/wp-content/uploads/2024/05/6.png', 'number' => '06'),
+                'Hor' => array('name' => '馬', 'image' => 'https://example.com/wp-content/uploads/2024/05/7.png', 'number' => '07'),
+                'Goa' => array('name' => '羊', 'image' => 'https://example.com/wp-content/uploads/2024/05/8.png', 'number' => '08'),
+                'Mon' => array('name' => '猴', 'image' => 'https://example.com/wp-content/uploads/2024/05/9.png', 'number' => '09'),
+                'Roo' => array('name' => '雞', 'image' => 'https://example.com/wp-content/uploads/2024/05/10.png', 'number' => '10'),
+                'Dog' => array('name' => '狗', 'image' => 'https://example.com/wp-content/uploads/2024/05/11.png', 'number' => '11'),
+                'Ele' => array('name' => '象', 'image' => 'https://example.com/wp-content/uploads/2024/05/12.png', 'number' => '12'),
+            );
+    
+            // Get all zodiac signs
+            $zodiac_signs = array_keys($zodiac_signs_mapping);
+    
+            // Select 3 random zodiac signs with replacement
+            $random_zodiac_signs = array();
+            $num_signs_to_select = 3;
+    
+            for ($i = 0; $i < $num_signs_to_select; $i++) {
+                $random_sign_index = array_rand($zodiac_signs);
+                $random_sign = $zodiac_signs[$random_sign_index];
+                
+                // Add the selected sign to the result array
+                $random_zodiac_signs[] = $random_sign;
+            }
+    
+            // Prepare the response with English, Chinese names, and image links
+            $response = array(
+                'success' => true,
+                'zodiac_signs' => array(),
+            );
+    
+            foreach ($random_zodiac_signs as $sign) {
+                $response['zodiac_signs'][] = array(
+                    'english_name' => $sign,
+                    'chinese_name' => $zodiac_signs_mapping[$sign]['name'],
+                    'image_link' => $zodiac_signs_mapping[$sign]['image'],
+                    'number' => sprintf('%02d', $zodiac_signs_mapping[$sign]['number']),
+                );
+            }
+    
+            return new WP_REST_Response($response, 200);
+        }
+    }
+    
+    // Initialize the plugin
+    $random_zodiac_api = new Random_Zodiac_API();
+    
+    function display_random_zodiac_shortcode() {
+        ob_start();
+        ?>
+        <div id="random-zodiac-container">
+            <h2>Random Zodiac Signs</h2>
+            <div id="zodiac-list"></div>
+            <button id="generateZodiacButton">Generate Random Zodiac Signs</button>
+            <button id="rerollZodiacButton">Reroll Zodiac Signs</button>
+        </div>
+    
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                document.getElementById('generateZodiacButton').addEventListener('click', function() {
+                    fetchRandomZodiac();
+                });
+    
+                document.getElementById('rerollZodiacButton').addEventListener('click', function() {
+                    rerollZodiac();
+                });
+            });
+    
+        function fetchRandomZodiac() {
+            const allowedIPs = '<?php echo get_option('allowed_ip_address', ''); ?>'; // Get allowed IP addresses from settings
+            const allowedIPsArray = allowedIPs.split(',').map(ip => ip.trim()); // Convert the string to an array of IPs
+        
+            const userIP = '<?php echo $_SERVER['REMOTE_ADDR']; ?>';
+        
+            if (!allowedIPsArray.includes(userIP)) {
+                alert(`Your IP address (${userIP}) does not have permission to do this.`);
+                return;
+            }
+        
+            const url = '<?php echo esc_url(rest_url('random-zodiac/v1/generate')); ?>?_=' + Date.now(); // Append cache-busting parameter
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.zodiac_signs.length > 0) {
+                        displayZodiacSigns(data.zodiac_signs);
+                        saveZodiacToDatabase(data.zodiac_signs);
+                    } else {
+                        console.error('Failed to fetch random zodiac signs.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching random zodiac signs:', error);
+                });
+        }
+    
+    
+            function rerollZodiac() {
+                const zodiacList = document.getElementById('zodiac-list');
+                zodiacList.innerHTML = ''; // Clear existing content
+                fetchRandomZodiac(); // Fetch new set of zodiac signs
+            }
+    
+            function displayZodiacSigns(zodiacSigns) {
+                const zodiacList = document.getElementById('zodiac-list');
+                zodiacList.innerHTML = ''; // Clear existing content
+            
+                const table = document.createElement('table');
+            
+                // Define the mapping of Chinese prize names to English translations
+                const prizeTranslations = {
+                    '头奖': 'First Prize',
+                    '二奖': 'Second Prize',
+                    '三奖': 'Third Prize'
+                };
+            
+                zodiacSigns.forEach((sign, index) => {
+                    const row = table.insertRow();
+            
+                    // Prize Name cell (Chinese and English)
+                    const prizeCell = row.insertCell();
+            
+                    const chinesePrize = ['头奖', '二奖', '三奖'][index];
+                    const translatedPrize = prizeTranslations[chinesePrize];
+            
+                    // Format the content to display Chinese and English names vertically
+                    prizeCell.innerHTML = `
+                        <div>${chinesePrize}</div>
+                        <div>${translatedPrize}</div>
+                    `;
+            
+                    // Image cell
+                    const imageCell = row.insertCell();
+                    const image = document.createElement('img');
+                    image.src = sign.image_link;
+                    image.alt = sign.english_name;
+                    image.style.objectFit = 'cover';
+                    imageCell.appendChild(image);
+            
+                    // Zodiac name cell
+                    const zodiacCell = row.insertCell();
+                    zodiacCell.innerHTML = `<div>${sign.chinese_name}</div><div>${sign.english_name}</div><div>${sign.number}</div>`;
+                });
+            
+                // Add table to the zodiacList container
+                zodiacList.appendChild(table);
+            }
+    
+            function saveZodiacToDatabase(zodiacSigns) {
+                const formData = new FormData();
+                formData.append('action', 'save_zodiac_to_database');
+    
+                zodiacSigns.forEach((sign, index) => {
+                    formData.append(`zodiac_${index + 1}_name`, sign.english_name);
+                    formData.append(`zodiac_${index + 1}_chinese_name`, sign.chinese_name);
+                    formData.append(`zodiac_${index + 1}_image`, sign.image_link);
+                    formData.append(`zodiac_${index + 1}_number`, sign.number);
+                });
+    
+                fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(result => {
+                    console.log('Zodiac signs saved to database:', result);
+                })
+                .catch(error => {
+                    console.error('Error saving zodiac signs to database:', error);
+                });
+            }
+        </script>
+        <?php
+        return ob_get_clean();
+    }
+    add_shortcode('display_random_zodiac', 'display_random_zodiac_shortcode');
+    
+    // Handle AJAX request to save zodiac signs to database
+    add_action('wp_ajax_save_zodiac_to_database', 'save_zodiac_to_database');
+    add_action('wp_ajax_nopriv_save_zodiac_to_database', 'save_zodiac_to_database');
+    
+    function save_zodiac_to_database() {
+        $user_ip = $_SERVER['REMOTE_ADDR'];
+        $allowed_ips = get_option('allowed_ip_address', ''); // Retrieve allowed IP addresses from settings
+        
+        $allowed_ips_array = array_map('trim', explode(',', $allowed_ips)); // Convert the string to an array of IPs
+        
+        // Validate user's IP against allowed IPs
+        $is_ip_allowed = false;
+        foreach ($allowed_ips_array as $allowed_ip) {
+            if (filter_var($user_ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                // IPv4 format
+                if ($user_ip === $allowed_ip) {
+                    $is_ip_allowed = true;
+                    break;
+                }
+            } elseif (filter_var($user_ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+                // IPv6 format
+                if (inet_pton($user_ip) === inet_pton($allowed_ip)) {
+                    $is_ip_allowed = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!$is_ip_allowed) {
+            return new WP_REST_Response(array('error' => 'Unauthorized'), 401);
+        }
+
+        global $wpdb;
+    
+        // Initialize arrays to hold zodiac data
+        $zodiac_names = array();
+        $zodiac_chinese_names = array();
+        $zodiac_images = array();
+        $zodiac_numbers = array();
+    
+        // Loop through zodiac data received from the client
+        for ($i = 1; $i <= 3; $i++) {
+            $zodiac_name = isset($_POST["zodiac_${i}_name"]) ? sanitize_text_field($_POST["zodiac_${i}_name"]) : '';
+            $zodiac_chi_name = isset($_POST["zodiac_${i}_chinese_name"]) ? sanitize_text_field($_POST["zodiac_${i}_chinese_name"]) : '';
+            $zodiac_image = isset($_POST["zodiac_${i}_image"]) ? esc_url_raw($_POST["zodiac_${i}_image"]) : '';
+            $zodiac_number = isset($_POST["zodiac_${i}_number"]) ? sanitize_text_field($_POST["zodiac_${i}_number"]) : '';
+    
+            if (!empty($zodiac_name)) {
+                $zodiac_names["zodiac_${i}"] = $zodiac_name;
+                $zodiac_chinese_names["zodiac_${i}_chi"] = $zodiac_chi_name;
+                $zodiac_images["zodiac_${i}_image"] = $zodiac_image;
+                $zodiac_numbers["zodiac_${i}_num"] = $zodiac_number;
+            }
+        }
+    
+        $date = current_time('Y-m-d');
+    
+        // Prepare data for database insertion
+        $data = array(
+            'date' => $date,
+        );
+    
+        // Merge zodiac name, Chinese name, and image data into the $data array
+        $data = array_merge($data, $zodiac_names, $zodiac_chinese_names, $zodiac_images, $zodiac_numbers);
+    
+        // Define format for data insertion
+        $format = array('%s'); // 'date' column format
+        for ($i = 1; $i <= 3; $i++) {
+            $format[] = '%s'; // English zodiac name format
+            $format[] = '%s'; // Chinese zodiac name format
+            $format[] = '%s'; // Image URL format
+            $format[] = '%s'; // num URL format
+        }
+    
+        // Insert data into the database table 'wp_zodiac'
+        $insert_result = $wpdb->insert(
+            'wp_zodiac',
+            $data,
+            $format
+        );
+    
+        if ($insert_result === false) {
+            // Database insertion failed
+            wp_send_json_error('Error saving zodiac signs to database.');
+        } else {
+            // Database insertion successful
+            wp_send_json_success('Zodiac signs saved to database.');
+        }
+    
+        wp_die();
+    }
+    
+    // Add a menu item under Settings menu in WordPress admin
+    function add_custom_menu_item() {
+        add_options_page( 'Custom Settings', 'Custom Settings', 'manage_options', 'custom-settings', 'custom_settings_page' );
+    }
+    add_action( 'admin_menu', 'add_custom_menu_item' );
+    
+    function register_custom_settings() {
+        register_setting('custom_settings_group', 'allowed_ip_address');
+    }
+    add_action('admin_init', 'register_custom_settings');
+    
+    
+function custom_settings_page() {
+    ?>
+    <div class="wrap">
+        <h2>Custom Settings</h2>
+        <form method="post" action="options.php">
+            <?php settings_fields('custom_settings_group'); ?>
+            <?php do_settings_sections('custom_settings_group'); ?>
+            <table class="form-table">
+                <tr valign="top">
+                    <th scope="row">Allowed IP Addresses:</th>
+                    <td>
+                        <input type="text" name="allowed_ip_address" value="<?php echo esc_attr(get_option('allowed_ip_address')); ?>" />
+                        <p class="description">Enter multiple IP addresses separated by commas. You can use both IPv4 and IPv6 formats.</p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button(); ?>
+        </form>
+    </div>
+    <?php
+}
+
+
+    
+    // Register and define the settings
+    function custom_settings_init() {
+        register_setting( 'custom_settings_group', 'allowed_ip_address' );
+    }
+    add_action( 'admin_init', 'custom_settings_init' );
+    
+    function enqueue_zodiac_table_styles() {
+        wp_enqueue_style('zodiac-table-styles', plugin_dir_url(__FILE__) . 'zodiac-table.css');
+    }
+    add_action('wp_enqueue_scripts', 'enqueue_zodiac_table_styles');
+    
+    
+    
+    function get_latest_zodiac_values() {
+        global $wpdb;
+    
+        // Query to retrieve the zodiac data with the highest id (most recent entry)
+        $query = "SELECT * FROM {$wpdb->prefix}zodiac ORDER BY id DESC LIMIT 1";
+        $latest_zodiac = $wpdb->get_row($query, ARRAY_A);
+    
+        return $latest_zodiac;
+    }
+    
+    function latest_zodiac_values_shortcode() {
+        // Get the latest zodiac values from the database
+        $latest_zodiac = get_latest_zodiac_values();
+    
+        // If no data is found, return a message
+        if (!$latest_zodiac) {
+            return 'No zodiac data found.';
+        }
+    
+        // Prepare output HTML for displaying the latest zodiac values in a table
+        $output = '<div class="latest-zodiac-values">';
+        $output .= '<h3>Latest Zodiac Values</h3>';
+        $output .= '<table class="zodiac-table">';
+    
+        // Define the zodiac positions and corresponding labels
+        $zodiac_positions = array(
+            'First Prize' => array('image_key' => 'zodiac_1_image', 'name_key' => 'zodiac_1', 'chi_key' => 'zodiac_1_chi', 'num_key' => 'zodiac_1_num'),
+            'Second Prize' => array('image_key' => 'zodiac_2_image', 'name_key' => 'zodiac_2', 'chi_key' => 'zodiac_2_chi', 'num_key' => 'zodiac_2_num'),
+            'Third Prize' => array('image_key' => 'zodiac_3_image', 'name_key' => 'zodiac_3', 'chi_key' => 'zodiac_3_chi', 'num_key' => 'zodiac_3_num')
+        );
+    
+        // Translation array for award labels
+        $words = array(
+            'First Prize' => '头奖',
+            'Second Prize' => '二奖',
+            'Third Prize' => '三奖'
+        );
+    
+        // Loop through each zodiac position and generate table rows
+        foreach ($zodiac_positions as $award => $data) {
+            $translated_award = isset($words[$award]) ? $words[$award] : ''; // Get translated award label
+            $output .= '<tr>';
+            $output .= '<td class="award-label">' . esc_html($translated_award) . '<div>' . esc_html($award) . '</div></td>'; // Display award label
+    
+            // Display zodiac image
+            $image_url = isset($latest_zodiac[$data['image_key']]) ? esc_url($latest_zodiac[$data['image_key']]) : '';
+            $output .= '<td><img src="' . $image_url . '" alt="Zodiac Image" class="zodiac-image"></td>';
+    
+            // Display zodiac name
+            $zodiac_chi_name = isset($latest_zodiac[$data['chi_key']]) ? esc_html($latest_zodiac[$data['chi_key']]) : '';
+            $zodiac_num = isset($latest_zodiac[$data['num_key']]) ? esc_html($latest_zodiac[$data['num_key']]) : '';
+            $zodiac_name = isset($latest_zodiac[$data['name_key']]) ? esc_html($latest_zodiac[$data['name_key']]) : '';
+            $output .= '<td class="zodiac-name">' . $zodiac_chi_name . '<div>' . $zodiac_name . '</div><div>' . $zodiac_num . '</div></td>';
+    
+            $output .= '</tr>';
+        }
+    
+        $output .= '</table>';
+        $output .= '</div>';
+    
+        return $output;
+    }
+    
+    add_shortcode('latest_zodiac_values', 'latest_zodiac_values_shortcode');
+    
+    function enqueue_zodiac_styles() {
+        // Enqueue the zodiac styles
+        wp_enqueue_style('zodiac-styles', plugin_dir_url(__FILE__) . 'zodiac-styles.css');
+    }
+    add_action( 'wp_enqueue_scripts', 'enqueue_zodiac_styles' );
+    
